@@ -24,7 +24,7 @@ from leed_tool.services.auto_assessment import assess_credit_evidence, assess_pr
 from leed_tool.services.checklist import build_checklist
 from leed_tool.services.export import build_result_bundle, build_summary_html
 from leed_tool.services.guide import build_guide_html, build_guide_markdown, strategic_credits
-from leed_tool.services.ingestion import MAX_FILE_BYTES, extract_many
+from leed_tool.services.ingestion import MAX_ARCHIVE_BYTES, MAX_FILE_BYTES, extract_many
 from leed_tool.services.review import review_design_text
 from leed_tool.services.risk import assess_submission_risk
 from leed_tool.styles import inject_css, metric_card, module_header
@@ -108,9 +108,13 @@ def render_upload_workspace(profile: ProjectProfile) -> None:
     with left:
         uploaded = st.file_uploader(
             "Project files and drawings",
-            type=["pdf", "docx", "xlsx", "csv", "txt", "md", "png", "jpg", "jpeg", "tif", "tiff", "dxf", "ifc", "dwg"],
+            type=["pdf", "docx", "xlsx", "xlsm", "csv", "txt", "md", "png", "jpg", "jpeg", "tif", "tiff", "dxf", "ifc", "dwg", "zip"],
             accept_multiple_files=True,
-            help=f"Up to 20 files per run and {MAX_FILE_BYTES // (1024 * 1024)} MB per file. Searchable PDF is preferred for drawings.",
+            help=(
+                f"Up to 20 uploads per run, {MAX_FILE_BYTES // (1024 * 1024)} MB per document, "
+                f"or {MAX_ARCHIVE_BYTES // (1024 * 1024)} MB per ZIP. ZIP contents are inspected in memory; "
+                "nested and password-protected archives are skipped."
+            ),
         )
         action_left, action_right = st.columns([1.35, 1])
         with action_left:
@@ -119,7 +123,7 @@ def render_upload_workspace(profile: ProjectProfile) -> None:
             demo = st.button("Try demo package", use_container_width=True)
     with right:
         st.markdown(
-            '<div class="surface"><strong>Private by default</strong><br><span style="color:#64736d">Local, in-memory parsing. No project content is sent to an external AI service.</span><hr style="border:none;border-top:1px solid #dfe8e2"><strong>Best inputs</strong><br><span style="color:#64736d">Searchable PDF, DOCX specifications, XLSX calculations, IFC/DXF exports.</span></div>',
+            '<div class="surface"><strong>Private by default</strong><br><span style="color:#64736d">Local, in-memory parsing. No project content is sent to an external AI service.</span><hr style="border:none;border-top:1px solid #dfe8e2"><strong>Best inputs</strong><br><span style="color:#64736d">Searchable PDF, DOCX specifications, XLSX/XLSM calculations, IFC/DXF exports, or one ZIP project package.</span></div>',
             unsafe_allow_html=True,
         )
 

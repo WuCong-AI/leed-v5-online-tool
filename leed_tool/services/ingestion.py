@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import mimetypes
 from dataclasses import dataclass, field
 from io import BytesIO, StringIO
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from zipfile import BadZipFile, ZipFile
 
 from docx import Document
 from openpyxl import load_workbook
@@ -15,13 +17,17 @@ from pypdf import PasswordType, PdfReader
 from pypdf.errors import DependencyError, PyPdfError
 
 MAX_FILE_BYTES = 30 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 100 * 1024 * 1024
+MAX_ARCHIVE_FILES = 100
+MAX_ARCHIVE_UNCOMPRESSED_BYTES = 300 * 1024 * 1024
+MAX_ARCHIVE_COMPRESSION_RATIO = 200
 MAX_TEXT_CHARS = 250_000
 MAX_PDF_PAGES = 300
 MAX_SHEET_ROWS = 5_000
 MAX_SHEET_COLUMNS = 80
 
 SUPPORTED_EXTENSIONS = {
-    ".pdf", ".docx", ".xlsx", ".csv", ".txt", ".md",
+    ".pdf", ".docx", ".xlsx", ".xlsm", ".csv", ".txt", ".md",
     ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".dxf", ".ifc", ".dwg",
 }
 
@@ -174,9 +180,11 @@ def extract_document(name: str, data: bytes, content_type: str = "") -> Document
         elif extension == ".docx":
             text = _extract_docx(data)
             kind = "Specification / Narrative"
-        elif extension == ".xlsx":
+        elif extension in {".xlsx", ".xlsm"}:
             text = _extract_xlsx(data, warnings)
             kind = "Calculation / Schedule"
+            if extension == ".xlsm":
+                warnings.append("VBA macros were not executed or analyzed; only cached worksheet values were read.")
         elif extension == ".csv":
             text = _extract_csv(data)
             kind = "Calculation / Schedule"
@@ -210,12 +218,117 @@ def extract_document(name: str, data: bytes, content_type: str = "") -> Document
     )
 
 
+def _archive_member_path(filename: str) -> PurePosixPath | None:
+    """Return a normalized safe member path without extracting it to disk."""
+
+    normalized = filename.replace("\\", "/").replace("\x00", "")
+    path = PurePosixPath(normalized)
+    if not normalized or path.is_absolute() or ".." in path.parts:
+        return None
+    return path
+
+
+def _archive_member_label(archive_name: str, path: PurePosixPath) -> str:
+    archive = _safe_name(archive_name)
+    member = " › ".join(part for part in path.parts if part not in {"", "."})
+    return f"{archive} :: {member}"[:180]
+
+
+def _extract_zip_archive(name: str, data: bytes) -> tuple[list[DocumentRecord], list[str]]:
+    """Safely inspect and parse supported files from one ZIP archive in memory."""
+
+    archive_name = _safe_name(name)
+    if not data:
+        return [], [f"Could not safely parse {archive_name}: the uploaded archive is empty."]
+    if len(data) > MAX_ARCHIVE_BYTES:
+        return [], [
+            f"Could not safely parse {archive_name}: ZIP exceeds the "
+            f"{MAX_ARCHIVE_BYTES // (1024 * 1024)} MB compressed upload limit."
+        ]
+
+    documents: list[DocumentRecord] = []
+    errors: list[str] = []
+    skipped: dict[str, list[str]] = {
+        "unsafe paths": [],
+        "unsupported types": [],
+        "nested ZIP archives": [],
+        "encrypted members": [],
+        "oversized members": [],
+        "suspicious compression ratios": [],
+    }
+    try:
+        with ZipFile(BytesIO(data)) as archive:
+            members = [info for info in archive.infolist() if not info.is_dir()]
+            total_uncompressed = sum(info.file_size for info in members)
+            if total_uncompressed > MAX_ARCHIVE_UNCOMPRESSED_BYTES:
+                return [], [
+                    f"Could not safely parse {archive_name}: ZIP expands to "
+                    f"{total_uncompressed / (1024 * 1024):.1f} MB; the safe limit is "
+                    f"{MAX_ARCHIVE_UNCOMPRESSED_BYTES // (1024 * 1024)} MB."
+                ]
+            if len(members) > MAX_ARCHIVE_FILES:
+                errors.append(
+                    f"{archive_name}: only the first {MAX_ARCHIVE_FILES} of "
+                    f"{len(members)} archive members were inspected."
+                )
+
+            for info in members[:MAX_ARCHIVE_FILES]:
+                path = _archive_member_path(info.filename)
+                display_name = info.filename[:120] or "unnamed member"
+                if path is None:
+                    skipped["unsafe paths"].append(display_name)
+                    continue
+                extension = path.suffix.lower()
+                if extension == ".zip":
+                    skipped["nested ZIP archives"].append(display_name)
+                    continue
+                if extension not in SUPPORTED_EXTENSIONS:
+                    skipped["unsupported types"].append(display_name)
+                    continue
+                if info.flag_bits & 0x1:
+                    skipped["encrypted members"].append(display_name)
+                    continue
+                if info.file_size > MAX_FILE_BYTES:
+                    skipped["oversized members"].append(display_name)
+                    continue
+                ratio = info.file_size / max(info.compress_size, 1)
+                if info.file_size > 1024 * 1024 and ratio > MAX_ARCHIVE_COMPRESSION_RATIO:
+                    skipped["suspicious compression ratios"].append(display_name)
+                    continue
+
+                member_name = _archive_member_label(archive_name, path)
+                try:
+                    member_data = archive.read(info)
+                    content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+                    documents.append(extract_document(member_name, member_data, content_type))
+                except (RuntimeError, ValueError, OSError, KeyError, EOFError) as exc:
+                    errors.append(f"{member_name}: {exc}")
+    except (BadZipFile, OSError, EOFError) as exc:
+        return [], [f"Could not safely parse {archive_name}: invalid or damaged ZIP archive ({exc})."]
+
+    for reason, names in skipped.items():
+        if names:
+            examples = ", ".join(names[:3])
+            suffix = "" if len(names) <= 3 else f" and {len(names) - 3} more"
+            errors.append(
+                f"{archive_name}: skipped {len(names)} member(s) due to {reason}: {examples}{suffix}."
+            )
+    if not documents and not errors:
+        errors.append(f"{archive_name}: the ZIP archive contains no supported project files.")
+    return documents, errors
+
+
 def extract_many(files: list[tuple[str, bytes, str]]) -> tuple[list[DocumentRecord], list[str]]:
-    """Extract a package while isolating failures to individual files."""
+    """Extract uploads and ZIP packages while isolating failures to individual files."""
 
     documents: list[DocumentRecord] = []
     errors: list[str] = []
     for name, data, content_type in files:
+        if Path(_safe_name(name)).suffix.lower() == ".zip":
+            archive_documents, archive_errors = _extract_zip_archive(name, data)
+            documents.extend(archive_documents)
+            errors.extend(archive_errors)
+            continue
         try:
             documents.append(extract_document(name, data, content_type))
         except ValueError as exc:

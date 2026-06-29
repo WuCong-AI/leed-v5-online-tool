@@ -67,6 +67,8 @@ The UI is intentionally thin. Business rules are pure Python functions in `leed_
 
 The upload pipeline automatically populates all five consultant modules through shared Streamlit session state, so users can accept the automated outputs or refine them manually.
 
+Supported uploads include searchable PDF, DOCX, XLSX/XLSM, CSV, TXT/Markdown, raster drawings, IFC/DXF/DWG, and ZIP project packages. ZIP files are inspected only in memory with limits on member count, expanded size, individual file size, and compression ratio. Nested or password-protected archives are skipped, and XLSM macros are never executed.
+
 ## Deploy online
 
 ### Streamlit Community Cloud
