@@ -11,7 +11,8 @@ from pathlib import Path
 from docx import Document
 from openpyxl import load_workbook
 from PIL import Image
-from pypdf import PdfReader
+from pypdf import PasswordType, PdfReader
+from pypdf.errors import DependencyError, PyPdfError
 
 MAX_FILE_BYTES = 30 * 1024 * 1024
 MAX_TEXT_CHARS = 250_000
@@ -61,12 +62,28 @@ def _truncate(text: str, warnings: list[str]) -> str:
 
 
 def _extract_pdf(data: bytes, warnings: list[str]) -> tuple[str, int]:
-    reader = PdfReader(BytesIO(data), strict=False)
+    try:
+        reader = PdfReader(BytesIO(data), strict=False)
+    except DependencyError as exc:
+        raise ValueError(
+            "Encrypted PDF support is unavailable on the server. "
+            "Install pypdf[crypto] or upload an unlocked PDF."
+        ) from exc
+    except PyPdfError as exc:
+        raise ValueError(f"PDF structure could not be read: {exc}") from exc
+
     if reader.is_encrypted:
         try:
-            reader.decrypt("")
-        except Exception as exc:  # pragma: no cover - parser-specific failure
-            raise ValueError("Encrypted PDF cannot be read without a password.") from exc
+            password_type = reader.decrypt("")
+        except DependencyError as exc:
+            raise ValueError(
+                "Encrypted PDF support is unavailable on the server. "
+                "Install pypdf[crypto] or upload an unlocked PDF."
+            ) from exc
+        except PyPdfError as exc:
+            raise ValueError("Password-protected PDF cannot be analyzed; upload an unlocked copy.") from exc
+        if password_type == PasswordType.NOT_DECRYPTED:
+            raise ValueError("Password-protected PDF cannot be analyzed; upload an unlocked copy.")
     page_count = len(reader.pages)
     if page_count > MAX_PDF_PAGES:
         warnings.append(f"Only the first {MAX_PDF_PAGES} of {page_count} PDF pages were analyzed.")
@@ -175,7 +192,7 @@ def extract_document(name: str, data: bytes, content_type: str = "") -> Document
             kind = "CAD Drawing"
             status = "Conversion required"
             warnings.append("Native DWG is inventoried but not parsed; export to searchable PDF, IFC, or DXF for automated review.")
-    except (ValueError, OSError, KeyError, EOFError) as exc:
+    except (ValueError, OSError, KeyError, EOFError, DependencyError, PyPdfError) as exc:
         raise ValueError(f"Could not safely parse {safe_name}: {exc}") from exc
 
     text = _truncate(text, warnings)
@@ -204,4 +221,3 @@ def extract_many(files: list[tuple[str, bytes, str]]) -> tuple[list[DocumentReco
         except ValueError as exc:
             errors.append(str(exc))
     return documents, errors
-
