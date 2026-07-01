@@ -170,7 +170,9 @@ def render_upload_workspace(profile: ProjectProfile) -> None:
             ]
             overflow_error = []
         else:
-            payloads = [(item.name, item.getvalue(), item.type or "") for item in limited_uploads]
+            # UploadedFile is already a seekable in-memory stream. Passing it
+            # through avoids a second full copy of 300–500 MB ZIP packages.
+            payloads = [(item.name, item, item.type or "") for item in limited_uploads]
         with st.spinner(f"Extracting project evidence and running {profile.rating_version} checks…"):
             documents, errors = extract_many(
                 payloads, deep_scan=analysis_mode == "Deep drawing scan"

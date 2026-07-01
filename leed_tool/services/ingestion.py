@@ -5,10 +5,12 @@ from __future__ import annotations
 import csv
 import hashlib
 import mimetypes
+import os
 import re
 from dataclasses import dataclass, field
 from io import BytesIO, StringIO
 from pathlib import Path, PurePosixPath
+from typing import BinaryIO, TypeAlias
 from zipfile import BadZipFile, ZipFile
 
 from docx import Document
@@ -17,9 +19,15 @@ from PIL import Image
 from pypdf import PasswordType, PdfReader
 from pypdf.errors import DependencyError, PyPdfError
 
-try:  # Optional high-fidelity drawing parsers installed in production.
-    import fitz  # type: ignore[import-not-found]
-except ImportError:  # pragma: no cover - local lightweight test environment
+# PyMuPDF is intentionally opt-in. Some malformed construction PDFs can abort its
+# native process before Python can catch an exception, which is unacceptable for
+# a shared online service. Set LEED_ENABLE_PYMUPDF=1 only in an isolated worker.
+if os.getenv("LEED_ENABLE_PYMUPDF") == "1":  # pragma: no cover - deployment option
+    try:
+        import fitz  # type: ignore[import-not-found]
+    except ImportError:
+        fitz = None
+else:
     fitz = None
 
 try:
@@ -45,6 +53,8 @@ SUPPORTED_EXTENSIONS = {
     ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".dxf", ".ifc", ".dwg",
 }
 
+BinaryData: TypeAlias = bytes | bytearray | memoryview | BinaryIO
+
 
 @dataclass(frozen=True, slots=True)
 class DocumentRecord:
@@ -62,6 +72,35 @@ class DocumentRecord:
 
 def _safe_name(name: str) -> str:
     return Path(name.replace("\x00", "")).name[:180] or "unnamed-file"
+
+
+def _data_size(data: BinaryData) -> int:
+    if isinstance(data, memoryview):
+        return data.nbytes
+    if isinstance(data, (bytes, bytearray)):
+        return len(data)
+    position = data.tell()
+    try:
+        data.seek(0, 2)
+        return data.tell()
+    finally:
+        data.seek(position)
+
+
+def _read_all_bytes(data: BinaryData) -> bytes:
+    if isinstance(data, bytes):
+        return data
+    if isinstance(data, bytearray):
+        return bytes(data)
+    if isinstance(data, memoryview):
+        return data.tobytes()
+    position = data.tell()
+    try:
+        data.seek(0)
+        value = data.read()
+        return value if isinstance(value, bytes) else bytes(value)
+    finally:
+        data.seek(position)
 
 
 def _decode_text(data: bytes) -> str:
@@ -373,14 +412,15 @@ def _is_priority_archive_member(path: PurePosixPath) -> bool:
 
 
 def _extract_zip_archive(
-    name: str, data: bytes, depth: int = 0, deep_scan: bool = False
+    name: str, data: BinaryData, depth: int = 0, deep_scan: bool = False
 ) -> tuple[list[DocumentRecord], list[str]]:
-    """Safely inspect and parse supported files from one ZIP archive in memory."""
+    """Safely inspect a ZIP without duplicating the outer upload in memory."""
 
     archive_name = _safe_name(name)
-    if not data:
+    data_size = _data_size(data)
+    if not data_size:
         return [], [f"Could not safely parse {archive_name}: the uploaded archive is empty."]
-    if len(data) > MAX_ARCHIVE_BYTES:
+    if data_size > MAX_ARCHIVE_BYTES:
         return [], [
             f"Could not safely parse {archive_name}: ZIP exceeds the "
             f"{MAX_ARCHIVE_BYTES // (1024 * 1024)} MB compressed upload limit."
@@ -396,8 +436,13 @@ def _extract_zip_archive(
         "oversized members": [],
         "suspicious compression ratios": [],
     }
+    passed_stream = not isinstance(data, (bytes, bytearray, memoryview))
+    original_position = data.tell() if passed_stream else None
+    source = data if passed_stream else BytesIO(data)
     try:
-        with ZipFile(BytesIO(data)) as archive:
+        if passed_stream:
+            data.seek(0)
+        with ZipFile(source) as archive:
             members = [info for info in archive.infolist() if not info.is_dir()]
             members.sort(
                 key=lambda info: (
@@ -477,6 +522,9 @@ def _extract_zip_archive(
                     errors.append(f"{member_name}: {exc}")
     except (BadZipFile, OSError, EOFError) as exc:
         return [], [f"Could not safely parse {archive_name}: invalid or damaged ZIP archive ({exc})."]
+    finally:
+        if passed_stream and original_position is not None:
+            data.seek(original_position)
 
     for reason, names in skipped.items():
         if names:
@@ -491,7 +539,7 @@ def _extract_zip_archive(
 
 
 def extract_many(
-    files: list[tuple[str, bytes, str]], deep_scan: bool = False
+    files: list[tuple[str, BinaryData, str]], deep_scan: bool = False
 ) -> tuple[list[DocumentRecord], list[str]]:
     """Extract uploads and ZIP packages while isolating failures to individual files."""
 
@@ -504,7 +552,9 @@ def extract_many(
             errors.extend(archive_errors)
             continue
         try:
-            documents.append(extract_document(name, data, content_type, deep_scan))
+            documents.append(
+                extract_document(name, _read_all_bytes(data), content_type, deep_scan)
+            )
         except ValueError as exc:
             errors.append(str(exc))
     return documents, errors
