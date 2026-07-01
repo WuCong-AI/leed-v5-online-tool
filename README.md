@@ -4,7 +4,7 @@ A deploy-ready, upload-first Streamlit consultant workspace. Upload the project 
 
 ## Upload-first online workflow
 
-The default `00 · Upload & auto-analyze` tab accepts up to 20 project files per run (30 MB each): searchable PDF, DOCX, XLSX, CSV, TXT/Markdown, PNG/JPEG/TIFF, IFC, DXF, and DWG.
+The default `00 · Upload & auto-analyze` tab accepts up to 20 project files per run: individual documents up to 60 MB or ZIP project packages up to 500 MB, including searchable PDF, DOCX, XLSX/XLSM, CSV, TXT/Markdown, PNG/JPEG/TIFF, IFC, DXF, and DWG.
 
 One click produces:
 
