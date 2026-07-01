@@ -1,6 +1,6 @@
-# LEED v5 Certification & Automation Tool
+# LEED v4 / v4.1 / v5 Certification & Automation Tool
 
-A deploy-ready, upload-first Streamlit consultant workspace. Upload the project package once and it connects evidence extraction, a live 110-point pre-assessment, deterministic design review, documentation collection, and final-submission risk control.
+A deploy-ready, upload-first Streamlit consultant workspace. Upload the project package once and it connects evidence extraction, a version/system-specific pre-assessment, deterministic drawing review, documentation collection, and final-submission risk control.
 
 ## Upload-first online workflow
 
@@ -10,7 +10,10 @@ One click produces:
 
 - File inventory with SHA-256 fingerprints and extraction diagnostics
 - Prerequisite evidence screen
-- Automated Yes/Maybe/No 110-point scorecard with confidence and source files
+- Switchable LEED v4, v4.1, and v5 rule packs for BD+C, ID+C, and O+M
+- Automated Yes/Maybe/No scorecards with version-specific totals, confidence, and source files
+- Official GBCI review report/scorecard detection; Awarded/Denied statuses override keyword signals
+- Reviewer-calibrated cross-checks for occupancy, area, HVAC model/drawing, weather file, low-emitting product, and formula consistency
 - Exact drawing/specification modification comments
 - Scorecard-driven documentation checklist
 - Submission risk register and corrective actions
@@ -67,7 +70,7 @@ The UI is intentionally thin. Business rules are pure Python functions in `leed_
 
 The upload pipeline automatically populates all five consultant modules through shared Streamlit session state, so users can accept the automated outputs or refine them manually.
 
-Supported uploads include searchable PDF, DOCX, XLSX/XLSM, CSV, TXT/Markdown, raster drawings, IFC/DXF/DWG, and ZIP project packages. ZIP files are inspected only in memory with limits on member count, expanded size, individual file size, and compression ratio. Nested or password-protected archives are skipped, and XLSM macros are never executed.
+Supported uploads include searchable PDF, DOCX, XLSX/XLSM, CSV, TXT/Markdown, raster drawings, IFC/DXF/DWG, and ZIP project packages up to 500 MB. ZIP files are inspected only in memory with limits on member count, expanded size, individual file size, and compression ratio. One nested ZIP level is inspected, password-protected archives are skipped, and XLSM macros are never executed. Rapid mode prioritizes review reports, clarifications, calculators, narratives, and key evidence while inventorying large scanned drawings; Deep drawing scan performs page-level extraction.
 
 ## Deploy online
 
@@ -88,11 +91,13 @@ For real client documents, use a private deployment with TLS, authentication, re
 
 ## Framework basis and limitations
 
-The data model reflects LEED v5's three impact areas: decarbonization, quality of life, and ecological conservation and restoration. It uses the standard 40/50/60/80 certification bands and explicitly warns that Platinum projects have additional mandatory performance requirements.
+The data model supports LEED v4, v4.1, and v5 family-specific scorecards and the standard 40/50/60/80 certification bands. LEED v5 additionally reflects decarbonization, quality of life, and ecological conservation/restoration impact areas and flags its additional Platinum performance requirements.
 
 This is an independent consultant planning and QA aid, not an official USGBC/GBCI scorecard, Arc form, certification decision, or substitute for the licensed reference guide. Credit names, point groupings, and deliverables are a compact representative planning model. Before using any output for a real application, reconcile it with:
 
 - [USGBC LEED v5 hub](https://www.usgbc.org/leed/v5)
+- [USGBC LEED v4.1 hub](https://www.usgbc.org/leed/v41)
+- [USGBC LEED v4 hub](https://www.usgbc.org/leed/v4)
 - [Official commercial certification guide](https://www.usgbc.org/tools/leed-certification/commercial)
 - The registered project's live Arc forms and rating-system selection
 - The online credit library and all addenda effective on the registration date

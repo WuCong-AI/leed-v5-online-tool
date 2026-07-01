@@ -1,19 +1,21 @@
-"""Curated LEED v5 planning dataset.
+"""Curated multi-version LEED planning datasets.
 
-The scorecard is a representative 110-point consultant planning model. It is
-deliberately compact enough for interactive pre-assessment and is not a copy of
-USGBC/GBCI proprietary forms. Teams must reconcile it with the rating system,
-credit library, Arc forms, and addenda applicable on the registration date.
+The rule packs are consultant planning models calibrated to official scorecard
+structures and supplied GBCI review examples. Teams must still reconcile them
+with the live rating system, credit library, Arc forms, and registration-date addenda.
 """
 
 from __future__ import annotations
 
 from .models import Credit, Prerequisite
 
+RATING_VERSIONS = ("LEED v4", "LEED v4.1", "LEED v5")
+
 PROJECT_TYPES = (
     "BD+C: New Construction",
     "BD+C: Core & Shell",
     "ID+C: Commercial Interiors",
+    "O+M: Existing Buildings",
 )
 
 TARGET_LEVELS = ("Certified", "Silver", "Gold", "Platinum")
@@ -90,10 +92,244 @@ CREDITS: tuple[Credit, ...] = (
 )
 
 
+_CATEGORY_META = {
+    "Integrative Process": ("Quality of Life", "LEED Consultant / Owner"),
+    "Location & Transportation": ("Decarbonization", "Transport Planner / Architect"),
+    "Sustainable Sites": ("Ecological Conservation", "Civil Engineer / Landscape Architect"),
+    "Water Efficiency": ("Ecological Conservation", "Plumbing Engineer / Landscape Architect"),
+    "Energy & Atmosphere": ("Decarbonization", "Energy Modeler / MEP Engineer"),
+    "Materials & Resources": ("Decarbonization", "Architect / Contractor"),
+    "Indoor Environmental Quality": ("Quality of Life", "Architect / MEP Engineer"),
+    "Innovation": ("Quality of Life", "LEED Consultant"),
+    "Regional / Project Priority": ("Ecological Conservation", "LEED Consultant"),
+}
+
+
+def _credit(code: str, category: str, name: str, points: int) -> Credit:
+    pillar, owner = _CATEGORY_META[category]
+    return Credit(
+        code, category, name, points, pillar,
+        f"Applicable calculator/form; narrative; drawings or schedules; source records for {name}",
+        owner,
+        strategy=f"Document the selected compliance path and reconcile every reported value for {name}.",
+    )
+
+
+def _prereq(code: str, category: str, name: str) -> Prerequisite:
+    pillar, _ = _CATEGORY_META[category]
+    return Prerequisite(
+        code, category, name, pillar,
+        summary=f"Demonstrate the mandatory {name} requirement using the selected version's form, calculations, and coordinated design/operations evidence.",
+    )
+
+
+V4_BDC_CREDITS = tuple(_credit(*row) for row in (
+    ("IPc1", "Integrative Process", "Integrative Process", 1),
+    ("LTc1", "Location & Transportation", "Sensitive Land Protection", 2),
+    ("LTc2", "Location & Transportation", "High Priority Site", 3),
+    ("LTc3", "Location & Transportation", "Surrounding Density and Diverse Uses", 6),
+    ("LTc4", "Location & Transportation", "Access to Quality Transit", 6),
+    ("LTc5", "Location & Transportation", "Bicycle Facilities", 1),
+    ("LTc6", "Location & Transportation", "Reduced Parking Footprint", 1),
+    ("LTc7", "Location & Transportation", "Green Vehicles", 1),
+    ("SSc1", "Sustainable Sites", "Site Assessment", 1),
+    ("SSc2", "Sustainable Sites", "Site Development - Protect or Restore Habitat", 2),
+    ("SSc3", "Sustainable Sites", "Open Space", 1),
+    ("SSc4", "Sustainable Sites", "Rainwater Management", 3),
+    ("SSc5", "Sustainable Sites", "Heat Island Reduction", 2),
+    ("SSc6", "Sustainable Sites", "Light Pollution Reduction", 1),
+    ("SSc7", "Sustainable Sites", "Tenant Design and Construction Guidelines", 1),
+    ("WEc1", "Water Efficiency", "Cooling Tower Water Use", 2),
+    ("WEc2", "Water Efficiency", "Water Metering", 1),
+    ("WEc3", "Water Efficiency", "Outdoor Water Use Reduction", 2),
+    ("WEc4", "Water Efficiency", "Indoor Water Use Reduction", 6),
+    ("EAc1", "Energy & Atmosphere", "Enhanced Commissioning", 6),
+    ("EAc2", "Energy & Atmosphere", "Advanced Energy Metering", 1),
+    ("EAc3", "Energy & Atmosphere", "Demand Response", 2),
+    ("EAc4", "Energy & Atmosphere", "Renewable Energy Production", 3),
+    ("EAc5", "Energy & Atmosphere", "Enhanced Refrigerant Management", 1),
+    ("EAc6", "Energy & Atmosphere", "Green Power and Carbon Offsets", 2),
+    ("EAc7", "Energy & Atmosphere", "Optimize Energy Performance", 18),
+    ("MRc1", "Materials & Resources", "Building Life-Cycle Impact Reduction", 6),
+    ("MRc2", "Materials & Resources", "Environmental Product Declarations", 2),
+    ("MRc3", "Materials & Resources", "Sourcing of Raw Materials", 2),
+    ("MRc4", "Materials & Resources", "Material Ingredients", 2),
+    ("MRc5", "Materials & Resources", "Construction and Demolition Waste Management", 2),
+    ("EQc1", "Indoor Environmental Quality", "Enhanced Indoor Air Quality Strategies", 2),
+    ("EQc2", "Indoor Environmental Quality", "Low-Emitting Materials", 3),
+    ("EQc3", "Indoor Environmental Quality", "Construction Indoor Air Quality Management Plan", 1),
+    ("EQc4", "Indoor Environmental Quality", "Daylight", 3),
+    ("EQc5", "Indoor Environmental Quality", "Quality Views", 1),
+    ("INc1", "Innovation", "Innovation", 5),
+    ("INc2", "Innovation", "LEED Accredited Professional", 1),
+    ("RPc1", "Regional / Project Priority", "Regional Priority Credits", 4),
+))
+
+V41_IDC_CREDITS = tuple(_credit(*row) for row in (
+    ("IPc1", "Integrative Process", "Integrative Process", 2),
+    ("LTc1", "Location & Transportation", "Surrounding Density and Diverse Uses", 8),
+    ("LTc2", "Location & Transportation", "Access to Quality Transit", 7),
+    ("LTc3", "Location & Transportation", "Bicycle Facilities", 1),
+    ("LTc4", "Location & Transportation", "Reduced Parking Footprint", 2),
+    ("WEc1", "Water Efficiency", "Indoor Water Use Reduction", 12),
+    ("EAc1", "Energy & Atmosphere", "Optimize Energy Performance", 24),
+    ("EAc2", "Energy & Atmosphere", "Enhanced Commissioning", 5),
+    ("EAc3", "Energy & Atmosphere", "Advanced Energy Metering", 2),
+    ("EAc4", "Energy & Atmosphere", "Renewable Energy", 6),
+    ("EAc5", "Energy & Atmosphere", "Enhanced Refrigerant Management", 1),
+    ("MRc1", "Materials & Resources", "Interiors Life-Cycle Impact Reduction", 5),
+    ("MRc2", "Materials & Resources", "Environmental Product Declarations", 2),
+    ("MRc3", "Materials & Resources", "Sourcing of Raw Materials", 2),
+    ("MRc4", "Materials & Resources", "Material Ingredients", 2),
+    ("MRc5", "Materials & Resources", "Construction and Demolition Waste Management", 2),
+    ("MRc6", "Materials & Resources", "Long-Term Commitment", 1),
+    ("EQc1", "Indoor Environmental Quality", "Enhanced Indoor Air Quality Strategies", 2),
+    ("EQc2", "Indoor Environmental Quality", "Low-Emitting Materials", 3),
+    ("EQc3", "Indoor Environmental Quality", "Construction Indoor Air Quality Management Plan", 1),
+    ("EQc4", "Indoor Environmental Quality", "Indoor Air Quality Assessment", 2),
+    ("EQc5", "Indoor Environmental Quality", "Thermal Comfort", 1),
+    ("EQc6", "Indoor Environmental Quality", "Interior Lighting", 2),
+    ("EQc7", "Indoor Environmental Quality", "Daylight", 3),
+    ("EQc8", "Indoor Environmental Quality", "Quality Views", 1),
+    ("EQc9", "Indoor Environmental Quality", "Acoustic Performance", 2),
+    ("INc1", "Innovation", "Innovation", 5),
+    ("INc2", "Innovation", "LEED Accredited Professional", 1),
+    ("RPc1", "Regional / Project Priority", "Regional Priority Credits", 4),
+))
+
+V4_OM_CREDITS = tuple(_credit(*row) for row in (
+    ("LTc1", "Location & Transportation", "Alternative Transportation Performance", 15),
+    ("SSc1", "Sustainable Sites", "Site Management", 2), ("SSc2", "Sustainable Sites", "Rainwater Management", 3),
+    ("SSc3", "Sustainable Sites", "Heat Island Reduction", 2), ("SSc4", "Sustainable Sites", "Light Pollution Reduction", 1),
+    ("SSc5", "Sustainable Sites", "Site Improvement Plan", 2),
+    ("WEc1", "Water Efficiency", "Indoor Water Use Reduction", 5), ("WEc2", "Water Efficiency", "Cooling Tower Water Use", 3),
+    ("WEc3", "Water Efficiency", "Water Metering", 2), ("WEc4", "Water Efficiency", "Outdoor Water Use Reduction", 2),
+    ("EAc1", "Energy & Atmosphere", "Existing Building Commissioning", 6), ("EAc2", "Energy & Atmosphere", "Optimize Energy Performance", 20),
+    ("EAc3", "Energy & Atmosphere", "Advanced Energy Metering", 2), ("EAc4", "Energy & Atmosphere", "Demand Response", 3),
+    ("EAc5", "Energy & Atmosphere", "Renewable Energy", 5), ("EAc6", "Energy & Atmosphere", "Enhanced Refrigerant Management", 1),
+    ("EAc7", "Energy & Atmosphere", "Green Power and Carbon Offsets", 1),
+    ("MRc1", "Materials & Resources", "Purchasing", 5), ("MRc2", "Materials & Resources", "Facility Maintenance and Renovation", 2),
+    ("MRc3", "Materials & Resources", "Solid Waste Management", 1),
+    ("EQc1", "Indoor Environmental Quality", "Indoor Air Quality Management Program", 2), ("EQc2", "Indoor Environmental Quality", "Green Cleaning", 4),
+    ("EQc3", "Indoor Environmental Quality", "Integrated Pest Management", 2), ("EQc4", "Indoor Environmental Quality", "Occupant Comfort", 2),
+    ("EQc5", "Indoor Environmental Quality", "Indoor Air Quality Assessment", 2), ("EQc6", "Indoor Environmental Quality", "Daylight and Quality Views", 2),
+    ("EQc7", "Indoor Environmental Quality", "Facility Alterations", 2), ("EQc8", "Indoor Environmental Quality", "Enhanced Indoor Air Quality", 1),
+    ("INc1", "Innovation", "Innovation", 5), ("INc2", "Innovation", "LEED Accredited Professional", 1),
+    ("RPc1", "Regional / Project Priority", "Regional Priority Credits", 4),
+))
+
+V41_OM_CREDITS = tuple(_credit(*row) for row in (
+    ("LTc1", "Location & Transportation", "Transportation Performance", 14),
+    ("WEc1", "Water Efficiency", "Water Performance", 15),
+    ("EAc1", "Energy & Atmosphere", "Energy Performance", 33),
+    ("EAc2", "Energy & Atmosphere", "Enhanced Refrigerant Management", 1),
+    ("MRc1", "Materials & Resources", "Purchasing", 4), ("MRc2", "Materials & Resources", "Waste Performance", 8),
+    ("EQc1", "Indoor Environmental Quality", "Indoor Environmental Quality Performance", 20),
+    ("EQc2", "Indoor Environmental Quality", "Green Cleaning", 3), ("EQc3", "Indoor Environmental Quality", "Integrated Pest Management", 1),
+    ("INc1", "Innovation", "Innovation", 1),
+))
+
+V5_IDC_CREDITS = tuple(_credit(*row) for row in (
+    ("IPc1", "Integrative Process", "Integrative Design Process", 1),
+    ("LTc1", "Location & Transportation", "Connected and Equitable Location", 6), ("LTc2", "Location & Transportation", "Transportation Demand Management", 5),
+    ("LTc3", "Location & Transportation", "Electric Vehicles and Low-Carbon Mobility", 4),
+    ("WEc1", "Water Efficiency", "Water Metering and Leak Detection", 1), ("WEc2", "Water Efficiency", "Enhanced Water Efficiency", 8),
+    ("EAc1", "Energy & Atmosphere", "Electrification", 5), ("EAc2", "Energy & Atmosphere", "Reduce Peak Thermal Loads", 5),
+    ("EAc3", "Energy & Atmosphere", "Enhanced Energy Efficiency", 10), ("EAc4", "Energy & Atmosphere", "Renewable Energy", 5),
+    ("EAc5", "Energy & Atmosphere", "Enhanced Commissioning", 4), ("EAc6", "Energy & Atmosphere", "Grid Interactive", 2),
+    ("EAc7", "Energy & Atmosphere", "Enhanced Refrigerant Management", 2), ("EAc8", "Energy & Atmosphere", "Advanced Energy Metering", 2),
+    ("MRc1", "Materials & Resources", "Interiors and Materials Reuse", 5), ("MRc2", "Materials & Resources", "Reduce Embodied Carbon", 6),
+    ("MRc3", "Materials & Resources", "Low-Emitting Materials", 3), ("MRc4", "Materials & Resources", "Building Product Selection and Procurement", 5),
+    ("MRc5", "Materials & Resources", "Construction and Demolition Waste Diversion", 2), ("MRc6", "Materials & Resources", "Circular Procurement", 4),
+    ("EQc1", "Indoor Environmental Quality", "Enhanced Air Quality", 2), ("EQc2", "Indoor Environmental Quality", "Occupant Experience", 7),
+    ("EQc3", "Indoor Environmental Quality", "Accessibility and Inclusion", 1), ("EQc4", "Indoor Environmental Quality", "Resilient Spaces", 2),
+    ("EQc5", "Indoor Environmental Quality", "Air Quality Testing and Monitoring", 2), ("EQc6", "Indoor Environmental Quality", "Acoustic Performance", 1),
+    ("PPc1", "Regional / Project Priority", "Project Priorities", 9), ("PPc2", "Regional / Project Priority", "LEED Accredited Professional", 1),
+))
+
+V5_OM_CREDITS = tuple(_credit(*row) for row in (
+    ("IPc1", "Integrative Process", "Resilience, Occupant Needs, and Decarbonization Planning", 5),
+    ("LTc1", "Location & Transportation", "Transportation Performance", 10),
+    ("WEc1", "Water Efficiency", "Water Performance and Leak Detection", 15),
+    ("EAc1", "Energy & Atmosphere", "Operational Carbon Performance", 25), ("EAc2", "Energy & Atmosphere", "Energy Efficiency and Grid Interaction", 8),
+    ("EAc3", "Energy & Atmosphere", "Enhanced Refrigerant Management", 2),
+    ("MRc1", "Materials & Resources", "Waste Performance and Circular Purchasing", 10), ("MRc2", "Materials & Resources", "Embodied Carbon in Alterations", 5),
+    ("EQc1", "Indoor Environmental Quality", "Indoor Environmental Quality Performance", 12),
+    ("EQc2", "Indoor Environmental Quality", "Green Cleaning and Integrated Pest Management", 4),
+    ("EQc3", "Indoor Environmental Quality", "Occupant Experience and Resilient Operations", 4),
+    ("PPc1", "Regional / Project Priority", "Project Priorities", 9), ("PPc2", "Regional / Project Priority", "LEED Accredited Professional", 1),
+))
+
+V4_BDC_PREREQUISITES = tuple(_prereq(*row) for row in (
+    ("SSp1", "Sustainable Sites", "Construction Activity Pollution Prevention"),
+    ("WEp1", "Water Efficiency", "Outdoor Water Use Reduction"), ("WEp2", "Water Efficiency", "Indoor Water Use Reduction"),
+    ("WEp3", "Water Efficiency", "Building-Level Water Metering"), ("EAp1", "Energy & Atmosphere", "Fundamental Commissioning and Verification"),
+    ("EAp2", "Energy & Atmosphere", "Minimum Energy Performance"), ("EAp3", "Energy & Atmosphere", "Building-Level Energy Metering"),
+    ("EAp4", "Energy & Atmosphere", "Fundamental Refrigerant Management"), ("MRp1", "Materials & Resources", "Storage and Collection of Recyclables"),
+    ("MRp2", "Materials & Resources", "Construction and Demolition Waste Management Planning"),
+    ("EQp1", "Indoor Environmental Quality", "Minimum Indoor Air Quality Performance"),
+    ("EQp2", "Indoor Environmental Quality", "Environmental Tobacco Smoke Control"),
+))
+
+V41_IDC_PREREQUISITES = tuple(_prereq(*row) for row in (
+    ("WEp1", "Water Efficiency", "Indoor Water Use Reduction"), ("EAp1", "Energy & Atmosphere", "Fundamental Commissioning and Verification"),
+    ("EAp2", "Energy & Atmosphere", "Minimum Energy Performance"), ("EAp3", "Energy & Atmosphere", "Fundamental Refrigerant Management"),
+    ("MRp1", "Materials & Resources", "Storage and Collection of Recyclables"), ("MRp2", "Materials & Resources", "Construction and Demolition Waste Management Planning"),
+    ("EQp1", "Indoor Environmental Quality", "Minimum Indoor Air Quality Performance"),
+    ("EQp2", "Indoor Environmental Quality", "Environmental Tobacco Smoke Control"),
+))
+
+V4_OM_PREREQUISITES = tuple(_prereq(*row) for row in (
+    ("SSp1", "Sustainable Sites", "Site Management Policy"), ("WEp1", "Water Efficiency", "Indoor Water Use Reduction"),
+    ("WEp2", "Water Efficiency", "Building-Level Water Metering"), ("EAp1", "Energy & Atmosphere", "Energy Efficiency Best Management Practices"),
+    ("EAp2", "Energy & Atmosphere", "Minimum Energy Performance"), ("EAp3", "Energy & Atmosphere", "Building-Level Energy Metering"),
+    ("EAp4", "Energy & Atmosphere", "Fundamental Refrigerant Management"), ("MRp1", "Materials & Resources", "Ongoing Purchasing and Waste Policies"),
+    ("EQp1", "Indoor Environmental Quality", "Minimum Indoor Air Quality Performance"), ("EQp2", "Indoor Environmental Quality", "Environmental Tobacco Smoke Control"),
+    ("EQp3", "Indoor Environmental Quality", "Green Cleaning Policy"),
+))
+
+V41_OM_PREREQUISITES = tuple(_prereq(*row) for row in (
+    ("LTp1", "Location & Transportation", "Transportation Performance"), ("WEp1", "Water Efficiency", "Water Performance"),
+    ("EAp1", "Energy & Atmosphere", "Energy Efficiency Best Management Practices"), ("EAp2", "Energy & Atmosphere", "Fundamental Refrigerant Management"),
+    ("EAp3", "Energy & Atmosphere", "Energy Performance"), ("MRp1", "Materials & Resources", "Purchasing Policy"),
+    ("MRp2", "Materials & Resources", "Facility Maintenance and Renovations Policy"), ("MRp3", "Materials & Resources", "Waste Performance"),
+    ("EQp1", "Indoor Environmental Quality", "Minimum Indoor Air Quality"), ("EQp2", "Indoor Environmental Quality", "Environmental Tobacco Smoke Control"),
+    ("EQp3", "Indoor Environmental Quality", "Green Cleaning Policy"), ("EQp4", "Indoor Environmental Quality", "Indoor Environmental Quality Performance"),
+))
+
+V5_IDC_PREREQUISITES = tuple(_prereq(*row) for row in (
+    ("IPp1", "Integrative Process", "Climate Resilience Assessment"), ("IPp2", "Integrative Process", "Human Impact Assessment"),
+    ("IPp3", "Integrative Process", "Carbon Assessment"), ("WEp1", "Water Efficiency", "Minimum Water Efficiency"),
+    ("EAp1", "Energy & Atmosphere", "Operational Carbon Projection and Decarbonization Plan"), ("EAp2", "Energy & Atmosphere", "Minimum Energy Efficiency"),
+    ("EAp3", "Energy & Atmosphere", "Fundamental Commissioning"), ("EAp4", "Energy & Atmosphere", "Energy Metering and Reporting"),
+    ("EAp5", "Energy & Atmosphere", "Fundamental Refrigerant Management"), ("MRp1", "Materials & Resources", "Planning for Zero Waste Operations"),
+    ("MRp2", "Materials & Resources", "Quantify and Assess Embodied Carbon"), ("EQp1", "Indoor Environmental Quality", "Construction Management"),
+    ("EQp2", "Indoor Environmental Quality", "Fundamental Air Quality"), ("EQp3", "Indoor Environmental Quality", "No Smoking or Vehicle Idling"),
+))
+
+V5_OM_PREREQUISITES = tuple(_prereq(*row) for row in (
+    ("IPp1", "Integrative Process", "Climate Resilience Assessment"), ("IPp2", "Integrative Process", "Occupant Needs Assessment"),
+    ("IPp3", "Integrative Process", "Operational Decarbonization Plan"), ("WEp1", "Water Efficiency", "Water Metering and Performance Data"),
+    ("EAp1", "Energy & Atmosphere", "Energy and Operational Carbon Performance Data"), ("EAp2", "Energy & Atmosphere", "Fundamental Refrigerant Management"),
+    ("MRp1", "Materials & Resources", "Waste and Purchasing Policies"), ("EQp1", "Indoor Environmental Quality", "Minimum Indoor Air Quality"),
+    ("EQp2", "Indoor Environmental Quality", "No Smoking"), ("EQp3", "Indoor Environmental Quality", "Green Cleaning Policy"),
+))
+
+RATING_SYSTEM_SOURCES = {
+    "LEED v4": "https://www.usgbc.org/leed/v4",
+    "LEED v4.1": "https://www.usgbc.org/leed/v41",
+    "LEED v5": "https://www.usgbc.org/leed/v5",
+}
+
+
 def project_family(project_type: str) -> str:
     """Return the broad rating-system family for applicability checks."""
 
-    return "ID+C" if project_type.startswith("ID+C") else "BD+C"
+    if project_type.startswith("ID+C"):
+        return "ID+C"
+    if project_type.startswith("O+M"):
+        return "O+M"
+    return "BD+C"
 
 
 def is_applicable(applicability: tuple[str, ...], project_type: str) -> bool:
@@ -102,9 +338,35 @@ def is_applicable(applicability: tuple[str, ...], project_type: str) -> bool:
     return project_type in applicability or project_family(project_type) in applicability
 
 
-def credits_for(project_type: str) -> tuple[Credit, ...]:
-    return tuple(c for c in CREDITS if is_applicable(c.applicability, project_type))
+def credits_for(project_type: str, rating_version: str = "LEED v5") -> tuple[Credit, ...]:
+    family = project_family(project_type)
+    if rating_version == "LEED v5":
+        if family == "ID+C":
+            return V5_IDC_CREDITS
+        if family == "O+M":
+            return V5_OM_CREDITS
+        return tuple(c for c in CREDITS if is_applicable(c.applicability, project_type))
+    if family == "ID+C":
+        return V41_IDC_CREDITS
+    if family == "O+M":
+        return V41_OM_CREDITS if rating_version == "LEED v4.1" else V4_OM_CREDITS
+    return V4_BDC_CREDITS
 
 
-def prerequisites_for(project_type: str) -> tuple[Prerequisite, ...]:
-    return tuple(p for p in PREREQUISITES if is_applicable(p.applicability, project_type))
+def prerequisites_for(project_type: str, rating_version: str = "LEED v5") -> tuple[Prerequisite, ...]:
+    family = project_family(project_type)
+    if rating_version == "LEED v5":
+        if family == "ID+C":
+            return V5_IDC_PREREQUISITES
+        if family == "O+M":
+            return V5_OM_PREREQUISITES
+        return tuple(p for p in PREREQUISITES if is_applicable(p.applicability, project_type))
+    if family == "ID+C":
+        return V41_IDC_PREREQUISITES
+    if family == "O+M":
+        return V41_OM_PREREQUISITES if rating_version == "LEED v4.1" else V4_OM_PREREQUISITES
+    return V4_BDC_PREREQUISITES
+
+
+def scorecard_total(project_type: str, rating_version: str = "LEED v5") -> int:
+    return sum(credit.points for credit in credits_for(project_type, rating_version))

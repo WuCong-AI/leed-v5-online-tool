@@ -1,4 +1,4 @@
-"""Typed domain models shared by the LEED v5 application modules."""
+"""Typed domain models shared by the multi-version LEED application."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ class ProjectProfile:
     location: str
     project_type: str
     target_level: str
+    rating_version: str = "LEED v5"
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,4 +73,3 @@ class RiskAssessment:
     strengths: tuple[str, ...] = field(default_factory=tuple)
     flags: tuple[str, ...] = field(default_factory=tuple)
     corrective_actions: tuple[str, ...] = field(default_factory=tuple)
-

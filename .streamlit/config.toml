@@ -8,8 +8,8 @@ font = "sans serif"
 [server]
 headless = true
 runOnSave = false
-maxUploadSize = 100
-maxMessageSize = 50
+maxUploadSize = 500
+maxMessageSize = 500
 enableXsrfProtection = true
 
 [browser]

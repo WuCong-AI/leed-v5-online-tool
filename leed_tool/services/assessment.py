@@ -30,10 +30,12 @@ def level_for_points(points: int) -> str:
     return "Not Certified"
 
 
-def calculate_certification(yes_points: int, maybe_points: int) -> CertificationResult:
+def calculate_certification(
+    yes_points: int, maybe_points: int, total_available: int = 110
+) -> CertificationResult:
     """Calculate a pipeline projection using Yes + Maybe points."""
 
-    projected = min(110, yes_points + maybe_points)
+    projected = min(total_available, yes_points + maybe_points)
     level = level_for_points(projected)
     next_level: str | None = None
     points_to_next = 0
@@ -74,4 +76,3 @@ def category_scores(
         if status in ("Yes", "Maybe"):
             row[str(status)] = int(row[str(status)]) + credit.points
     return [result[name] for name in ordered_categories]
-

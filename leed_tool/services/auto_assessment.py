@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from ..data import CREDITS, PREREQUISITES
+from ..models import Credit, Prerequisite
 from .ingestion import DocumentRecord
 
 
@@ -116,9 +118,87 @@ def _map_one(code: str, name: str, keywords: tuple[str, ...], documents: list[Do
     return EvidenceAssessment(code, name, status, confidence, tuple(matches), tuple(dict.fromkeys(sources)), snippet)
 
 
-def assess_credit_evidence(documents: list[DocumentRecord]) -> list[EvidenceAssessment]:
-    return [_map_one(c.code, c.name, CREDIT_KEYWORDS.get(c.code, (c.name.lower(),)), documents) for c in CREDITS]
+def _official_review_override(
+    assessment: EvidenceAssessment, documents: list[DocumentRecord]
+) -> EvidenceAssessment:
+    review_documents = [
+        document for document in documents
+        if "leed certification review report" in document.text.lower().replace("ﬁ", "fi")
+    ]
+    if not review_documents:
+        return assessment
+    significant = [
+        token for token in re.findall(r"[a-z0-9]+", assessment.name.lower())
+        if token not in {"and", "the", "of", "for", "to"}
+    ][:5]
+    if not significant:
+        return assessment
+    credit_pattern = r"[\s\-]+".join(re.escape(token) for token in significant)
+    direct_status_pattern = re.compile(
+        credit_pattern + r"\s+(Awarded|Denied|Withdrawn|Pending|Attempted)\b",
+        re.IGNORECASE | re.DOTALL,
+    )
+    fallback_status_pattern = re.compile(
+        credit_pattern + r".{0,80}?\b(Awarded|Denied|Withdrawn|Pending|Attempted)\b",
+        re.IGNORECASE | re.DOTALL,
+    ) if len(significant) >= 2 else None
+    for document in review_documents:
+        normalized_text = document.text.replace("ﬁ", "fi").replace("ﬀ", "ff")
+        match = direct_status_pattern.search(normalized_text)
+        if not match and fallback_status_pattern is not None:
+            match = fallback_status_pattern.search(normalized_text)
+        if not match:
+            continue
+        review_status = match.group(1).lower()
+        status = "Yes" if review_status == "awarded" else "Maybe" if review_status in {"pending", "attempted"} else "No"
+        return EvidenceAssessment(
+            assessment.code,
+            assessment.name,
+            status,
+            99,
+            (f"official review: {review_status}",),
+            (document.name,),
+            f"Official GBCI review status detected: {match.group(1)}.",
+        )
+    return assessment
 
 
-def assess_prerequisite_evidence(documents: list[DocumentRecord]) -> list[EvidenceAssessment]:
-    return [_map_one(p.code, p.name, PREREQUISITE_KEYWORDS.get(p.code, (p.name.lower(),)), documents) for p in PREREQUISITES]
+def _keywords_for(name: str, configured: tuple[str, ...]) -> tuple[str, ...]:
+    aliases = {
+        "indoor water use reduction": ("water use", "fixture", "flush rate", "flow rate", "water reduction"),
+        "minimum indoor air quality performance": ("ventilation", "outdoor air", "vrp", "ashrae 62.1", "airflow"),
+        "low-emitting materials": ("low-emitting", "voc", "cdph", "greenguard gold", "emissions evaluation"),
+        "optimize energy performance": ("energy model", "ashrae 90.1", "energy cost savings", "greenhouse gas", "simulation"),
+        "construction and demolition waste management": ("construction waste", "demolition waste", "diversion", "waste generated", "recycling"),
+        "daylight": ("daylight", "spatial daylight autonomy", "sda", "glare control", "weather file"),
+        "enhanced commissioning": ("commissioning", "functional performance test", "issues log", "commissioning report", "cx plan"),
+        "leed accredited professional": ("leed ap", "accredited professional", "project team"),
+    }
+    key = name.lower()
+    return tuple(dict.fromkeys(configured + aliases.get(key, ()) + (key,)))
+
+
+def assess_credit_evidence(
+    documents: list[DocumentRecord], credits: Sequence[Credit] | None = None
+) -> list[EvidenceAssessment]:
+    selected = credits or CREDITS
+    return [
+        _official_review_override(
+            _map_one(c.code, c.name, _keywords_for(c.name, CREDIT_KEYWORDS.get(c.code, ())), documents),
+            documents,
+        )
+        for c in selected
+    ]
+
+
+def assess_prerequisite_evidence(
+    documents: list[DocumentRecord], prerequisites: Sequence[Prerequisite] | None = None
+) -> list[EvidenceAssessment]:
+    selected = prerequisites or PREREQUISITES
+    return [
+        _official_review_override(
+            _map_one(p.code, p.name, _keywords_for(p.name, PREREQUISITE_KEYWORDS.get(p.code, ())), documents),
+            documents,
+        )
+        for p in selected
+    ]
